@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Cube with Interactive Controls</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #eeeeee;
+    }
+    #cube-container {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+
+    /* Sidebar Styling */
+    #sidebar {
+      position: fixed;
+      top: 0;
+      right: -375px;
+      width: 300px;
+      height: 100vh;
+      background: #333;
+      color: #fff;
+      transition: right 0.3s ease;
+      padding: 20px;
+      box-shadow: -2px 0 5px rgba(0, 0, 0, 0.5);
+      z-index: 10;
+    }
+    #sidebar.open {
+      right: 0;
+    }
+    #sidebar h2 {
+      font-size: 24px;
+      margin-bottom: 10px;
+      color: #ffdd57;
+    }
+    #sidebar label {
+      font-size: 14px;
+      margin-top: 10px;
+      display: block;
+      color: #ffdd57;
+    }
+    #sidebar input[type="range"],
+    #sidebar input[type="color"] {
+      width: 100%;
+    }
+    #sidebar button {
+      margin-top: 20px;
+      padding: 10px;
+      width: 100%;
+      background: #ffdd57;
+      border: none;
+      color: #333;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    /* Hamburger Icon */
+    #menu-toggle {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      font-size: 24px;
+      color: #999;
+      cursor: pointer;
+      z-index: 11;
+    }
+  </style>
+</head>
+<body>
+  <div id="cube-container"></div>
+  <i id="menu-toggle" class="fas fa-bars"></i>
+
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <h2>Customize Cube</h2>
+    <label for="cube-size">Cube Size</label>
+    <input type="range" id="cube-size" min="0.2" max="1" step="0.1" value="0.5">
+
+    <label for="cube-spacing">Spacing</label>
+    <input type="range" id="cube-spacing" min="0.01" max="0.2" step="0.01" value="0.05">
+
+    <label for="rotation-speed">Rotation Speed</label>
+    <input type="range" id="rotation-speed" min="0.00005" max="0.001" step="0.00005" value="0.00008">
+
+    <label for="color-front">Front Color</label>
+    <input type="color" id="color-front" value="#ff4500">
+
+    <label for="color-back">Back Color</label>
+    <input type="color" id="color-back" value="#ffa500">
+
+    <label for="color-left">Left Color</label>
+    <input type="color" id="color-left" value="#0000ff">
+
+    <label for="color-right">Right Color</label>
+    <input type="color" id="color-right" value="#008000">
+
+    <label for="color-top">Top Color</label>
+    <input type="color" id="color-top" value="#ffffff">
+
+    <label for="color-bottom">Bottom Color</label>
+    <input type="color" id="color-bottom" value="#ffff00">
+
+    <button onclick="updateCube()">Update Cube</button>
+  </div>
+
+  <!-- Include Three.js from a CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Include Hammer.js for touch gestures -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+
+  <script>
+    // Toggle Sidebar
+    document.getElementById('menu-toggle').onclick = function() {
+      document.getElementById('sidebar').classList.toggle('open');
+    };
+
+    // Set up the scene, camera, and renderer
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.z = 4; // Adjusted camera position for better visibility
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0xeeeeee, 1); // Light background color for visibility
+    document.getElementById('cube-container').appendChild(renderer.domElement);
+
+    // Add ambient and directional light for better visibility
+    const ambientLight = new THREE.AmbientLight(0x606060, 1.5); // Softer lighting
+    scene.add(ambientLight);
+
+    const pointLight = new THREE.PointLight(0xffffff, 1.5); // Bright point light for color visibility
+    pointLight.position.set(10, 10, 10);
+    scene.add(pointLight);
+
+    // Default parameters
+    let cubeSize = 0.5;
+    let spacing = 0.05;
+    let rotationSpeed = 0.00008;
+
+    let cubes = [];
+
+    function createCube() {
+      // Remove existing cubes
+      cubes.forEach(cube => scene.remove(cube));
+      cubes = [];
+
+      // Retrieve colors from input fields for dynamic updates
+      const colors = {
+        front: new THREE.Color(document.getElementById('color-front').value),
+        back: new THREE.Color(document.getElementById('color-back').value),
+        left: new THREE.Color(document.getElementById('color-left').value),
+        right: new THREE.Color(document.getElementById('color-right').value),
+        top: new THREE.Color(document.getElementById('color-top').value),
+        bottom: new THREE.Color(document.getElementById('color-bottom').value)
+      };
+
+      // Create a 3x3x3 cube with updated parameters
+      for (let x = -1; x <= 1; x++) {
+        for (let y = -1; y <= 1; y++) {
+          for (let z = -1; z <= 1; z++) {
+            const geometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+            const materials = [
+              new THREE.MeshBasicMaterial({ color: colors.right, side: THREE.DoubleSide }),  // Right face
+              new THREE.MeshBasicMaterial({ color: colors.left, side: THREE.DoubleSide }),   // Left face
+              new THREE.MeshBasicMaterial({ color: colors.top, side: THREE.DoubleSide }),    // Top face
+              new THREE.MeshBasicMaterial({ color: colors.bottom, side: THREE.DoubleSide }), // Bottom face
+              new THREE.MeshBasicMaterial({ color: colors.front, side: THREE.DoubleSide }),  // Front face
+              new THREE.MeshBasicMaterial({ color: colors.back, side: THREE.DoubleSide })    // Back face
+            ];
+            const cube = new THREE.Mesh(geometry, materials);
+            cube.position.set(
+              x * (cubeSize + spacing),
+              y * (cubeSize + spacing),
+              z * (cubeSize + spacing)
+            );
+            scene.add(cube);
+            cubes.push(cube);
+          }
+        }
+      }
+    }
+
+    // Initialize cube with colors
+    createCube();
+
+    // Update cube properties dynamically
+    function updateCube() {
+      cubeSize = parseFloat(document.getElementById('cube-size').value);
+      spacing = parseFloat(document.getElementById('cube-spacing').value);
+      rotationSpeed = parseFloat(document.getElementById('rotation-speed').value);
+      createCube(); // Recreate the cube with new parameters and colors
+    }
+
+    // Rotation variables
+    let isDragging = false;
+    let previousMousePosition = { x: 0, y: 0 };
+    let rotationX = 0;
+    let rotationY = 0;
+
+    document.addEventListener('mousedown', (event) => {
+      isDragging = true;
+      previousMousePosition = { x: event.clientX, y: event.clientY };
+    });
+
+    document.addEventListener('mousemove', (event) => {
+      if (isDragging) {
+        const deltaMove = {
+          x: event.clientX - previousMousePosition.x,
+          y: event.clientY - previousMousePosition.y
+        };
+
+        rotationY += deltaMove.x * rotationSpeed;
+        rotationX += deltaMove.y * rotationSpeed;
+
+        previousMousePosition = { x: event.clientX, y: event.clientY };
+      }
+    });
+
+    document.addEventListener('mouseup', () => {
+      isDragging = false;
+    });
+
+    // Hammer.js for touch gestures
+    const hammer = new Hammer(document.getElementById('cube-container'));
+    hammer.get('pan').set({ direction: Hammer.DIRECTION_ALL });
+
+    hammer.on('pan', (event) => {
+      rotationY += event.deltaX * rotationSpeed;
+      rotationX -= event.deltaY * rotationSpeed;
+    });
+
+    function animate() {
+      requestAnimationFrame(animate);
+      scene.rotation.x = rotationX;
+      scene.rotation.y = rotationY;
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+    });
+  </script>
+</body>
+</html>
